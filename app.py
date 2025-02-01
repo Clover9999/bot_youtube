@@ -6,10 +6,24 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from googleapiclient.http import MediaFileUpload
+import sys
+
+# Definindo o caminho dos arquivos dependendo de ser executável ou não
+if getattr(sys, 'frozen', False):
+    # Caso esteja em um executável
+    client_secret_path = os.path.join(sys._MEIPASS, 'client_secrets.json')
+    token_file_path = os.path.join(sys._MEIPASS, 'token.json')
+else:
+    # Caso esteja rodando no ambiente de desenvolvimento
+    client_secret_path = 'client_secrets.json'
+    token_file_path = 'token.json'
+
+# Verifique se o arquivo 'client_secrets.json' existe
+if not os.path.exists(client_secret_path):
+    messagebox.showerror("Erro", "Arquivo 'client_secrets.json' não encontrado!")
+    sys.exit()
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
-TOKEN_FILE = "token.json"
-CLIENT_SECRET_FILE = "client_secrets.json"
 
 # Criar janela principal
 ctk.set_appearance_mode("dark")  # Modo escuro
@@ -28,21 +42,30 @@ file_listbox.pack(pady=10, padx=10, fill="both", expand=True)
 
 def get_authenticated_service():
     creds = None
-    if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+    if os.path.exists(token_file_path):
+        creds = Credentials.from_authorized_user_file(token_file_path, SCOPES)
     
     if not creds or not creds.valid:
-        flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, SCOPES)
-        creds = flow.run_local_server(port=0)
-        with open(TOKEN_FILE, "w") as token:
-            token.write(creds.to_json())
+        try:
+            # Usando run_local_server() para autenticação via navegador
+            flow = InstalledAppFlow.from_client_secrets_file(client_secret_path, SCOPES)
+            creds = flow.run_local_server(port=0)  # Usando run_local_server() para gerar o link de autenticação
+
+            with open(token_file_path, "w") as token:
+                token.write(creds.to_json())
+
+        except Exception as e:
+            # Captura a exceção e exibe mais detalhes
+            print(f"Erro ao autenticar: {e}")
+            messagebox.showerror("Erro de autenticação", f"Ocorreu um erro ao autenticar o usuário: {e}")
+            return None
 
     return build("youtube", "v3", credentials=creds)
 
 def integrate_auth():
     """Refaz manualmente a autenticação do usuário"""
     try:
-        os.remove(TOKEN_FILE)  # Deleta o token para forçar nova autenticação
+        os.remove(token_file_path)  # Deleta o token para forçar nova autenticação
     except FileNotFoundError:
         pass
     messagebox.showinfo("Integração", "Faça login na sua conta do Google para integrar novamente.")
